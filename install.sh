@@ -4,7 +4,27 @@
 #
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_REPO="https://github.com/prathamrajbhar/aakash-system.git"
+INSTALL_DIR="${AAKASH_INSTALL_DIR:-$HOME/.aakash}"
+
+# If running directly inside repository, use current dir; otherwise clone/bootstrap into INSTALL_DIR
+if [ -f "./docker-compose.yml" ] && [ -f "./Dockerfile" ]; then
+  SCRIPT_DIR="$(pwd)"
+else
+  if ! command -v git >/dev/null 2>&1; then
+    printf "Error: git is required to download Aakash. Please install git or clone the repo.\n" >&2
+    exit 1
+  fi
+  if [ -d "$INSTALL_DIR/.git" ]; then
+    printf "Updating existing Aakash installation at %s...\n" "$INSTALL_DIR"
+    git -C "$INSTALL_DIR" pull --quiet
+  else
+    printf "Cloning Aakash System into %s...\n" "$INSTALL_DIR"
+    git clone --depth 1 --quiet "$TARGET_REPO" "$INSTALL_DIR"
+  fi
+  SCRIPT_DIR="$INSTALL_DIR"
+fi
+
 cd "$SCRIPT_DIR"
 
 # UI Theme Tokens

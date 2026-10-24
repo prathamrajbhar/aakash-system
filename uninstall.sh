@@ -4,7 +4,16 @@
 #
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="${AAKASH_INSTALL_DIR:-$HOME/.aakash}"
+
+if [ -f "./docker-compose.yml" ] && [ -f "./Dockerfile" ]; then
+  SCRIPT_DIR="$(pwd)"
+elif [ -d "$INSTALL_DIR" ]; then
+  SCRIPT_DIR="$INSTALL_DIR"
+else
+  SCRIPT_DIR="$(pwd)"
+fi
+
 cd "$SCRIPT_DIR"
 
 # UI Theme Tokens
