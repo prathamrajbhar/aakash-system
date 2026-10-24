@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.gitignore
+aakash-data
+aakash-dashboard-data
+dashboard-data
+data
+*.log
+.env
+.env.*
+!.env.example
+tsconfig.tsbuildinfo

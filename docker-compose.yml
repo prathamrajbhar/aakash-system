@@ -1,0 +1,45 @@
+services:
+  aakash:
+    # Bundled emulator engine. Set AAKASH_EMULATOR_IMAGE to run your own build.
+    image: ${AAKASH_EMULATOR_IMAGE:-floci/floci:latest}
+    container_name: aakash
+    restart: always
+    ports:
+      - "4566:4566"           # All AWS API calls: S3, DynamoDB, SQS, SNS, Lambda, SES, IAM, etc.
+      - "7001-7069:7001-7069" # RDS proxy ports (Postgres/MySQL/MariaDB)
+      - "7071-7099:7071-7099" # RDS proxy ports (skipping 7070 to avoid host conflict)
+      - "6380-6399:6380-6399" # ElastiCache proxy ports (Redis/Valkey)
+    volumes:
+      - ${AAKASH_HOST_DATA_PATH:-./aakash-data}:/var/lib/floci
+      - ${AAKASH_HOST_DATA_PATH:-./aakash-data}:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Native environment variables expected by the bundled emulator engine.
+      FLOCI_STORAGE_MODE: persistent
+      FLOCI_STORAGE_PERSISTENT_PATH: /var/lib/floci
+      FLOCI_SERVICES_DOCKER_NETWORK: aakash_default
+      SERVICES_RDS_DEFAULT_POSTGRES_IMAGE: pgvector/pgvector:pg16
+      FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE: pgvector/pgvector:pg16
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aakash-dashboard
+    restart: always
+    ports:
+      - "3050:3050"
+    environment:
+      - AAKASH_ENDPOINT=http://aakash:4566
+      - AAKASH_NETWORK_MODE=local
+      - AAKASH_PUBLIC_HOST=localhost
+      - AAKASH_CONFIG_STORAGE_PATH=/app/data/aakash-ui-config.json
+    volumes:
+      - ./aakash-dashboard-data:/app/data
+      - ${AAKASH_HOST_DATA_PATH:-./aakash-data}:/var/lib/floci:ro
+    depends_on:
+      - aakash
+
+networks:
+  default:
+    name: aakash_default
