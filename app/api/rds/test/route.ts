@@ -3,7 +3,7 @@ import { getRDSClient } from "@/lib/aws/clients";
 import { DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
 import { testRDSConnectionSchema } from "@/lib/validations/rds";
 import { getRdsPassword } from "@/lib/rds-credential-store";
-import { buildServerRdsDetails, resolveServerProbeHost } from "@/lib/aakash-network-server";
+import { buildServerRdsDetails, isAllowedProbeHost, resolveServerProbeHost } from "@/lib/aakash-network-server";
 import { logger } from "@/lib/logger";
 import pg from "pg";
 import mysql from "mysql2/promise";
@@ -60,6 +60,14 @@ export async function POST(request: NextRequest) {
     }
 
     const input = validation.data;
+
+    if (input.host && !isAllowedProbeHost(input.host)) {
+      return NextResponse.json(
+        { success: false, error: "That host is not an allowed connection-test target." },
+        { status: 400 }
+      );
+    }
+
     let engine = input.engine || "postgres";
     let host = input.host;
     let port = input.port;

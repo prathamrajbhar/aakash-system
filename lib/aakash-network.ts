@@ -84,7 +84,13 @@ export function getActiveNetworkConfig(overrideConfig?: Partial<AakashNetworkCon
  */
 export function buildAakashApiEndpoint(config?: AakashNetworkConfig): string {
   const active = getActiveNetworkConfig(config);
-  return `${active.protocol}://${active.host}:${active.apiPort}`;
+  // Behind a reverse proxy or tunnel the API is on the standard port, which URLs leave out.
+  const isDefaultPort =
+    (active.protocol === "https" && active.apiPort === 443) ||
+    (active.protocol === "http" && active.apiPort === 80);
+  return isDefaultPort
+    ? `${active.protocol}://${active.host}`
+    : `${active.protocol}://${active.host}:${active.apiPort}`;
 }
 
 /**

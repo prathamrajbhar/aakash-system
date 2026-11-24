@@ -62,3 +62,15 @@ describe("getEnvNetworkConfig", () => {
     expect(getEnvNetworkConfig({ AAKASH_API_PORT: "99999" }).apiPort).toBe(4566);
   });
 });
+
+describe("buildAakashApiEndpoint on a public domain", () => {
+  it("omits the port when it is the default for the protocol", () => {
+    expect(buildAakashApiEndpoint({ protocol: "https", host: "api.example.com", apiPort: 443 })).toBe("https://api.example.com");
+    expect(buildAakashApiEndpoint({ protocol: "http", host: "api.example.com", apiPort: 80 })).toBe("http://api.example.com");
+  });
+
+  it("keeps non-default ports", () => {
+    expect(buildAakashApiEndpoint({ protocol: "https", host: "h", apiPort: 8443 })).toBe("https://h:8443");
+    expect(buildAakashApiEndpoint({ protocol: "http", host: "localhost", apiPort: 4566 })).toBe("http://localhost:4566");
+  });
+});

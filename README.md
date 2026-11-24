@@ -38,6 +38,15 @@ Once installed, your local cloud and management interface are immediately access
 - **Region**: `us-east-1` (or your configured region)
 - **Access / Secret Keys**: Any placeholder string (e.g., `test` / `test`)
 
+> ⚠️ The default install has **no authentication** and is meant for your own machine. Do not expose ports `3050` or `4566` to the internet.
+
+---
+
+## 🌍 Run it on a server, reach it from anywhere
+
+To use Aakash from the internet on your own domain through a Cloudflare Tunnel (login-protected dashboard, signed
+AWS API endpoint, optional public file URLs, no open ports), follow [docs/DEPLOY-CLOUDFLARE.md](docs/DEPLOY-CLOUDFLARE.md).
+
 ---
 
 ## 🗑️ One-Line Uninstaller
