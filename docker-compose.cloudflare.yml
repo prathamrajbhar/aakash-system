@@ -44,6 +44,8 @@ services:
       FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE: pgvector/pgvector:pg16
       # Verify the SigV4 signature of every signed request and refuse unsigned S3 object
       # reads. The gateway adds the rest (unsigned requests, the dev key, admin paths).
+      # URLs the emulator hands back to clients (SQS queue URLs, etc.) must be the public API address.
+      FLOCI_BASE_URL: https://${AAKASH_API_HOSTNAME:?set AAKASH_API_HOSTNAME in .env}
       FLOCI_AUTH_VALIDATE_SIGNATURES: "true"
       FLOCI_SERVICES_S3_ENFORCE_AUTH: "true"
 
