@@ -86,3 +86,20 @@ The files hostname never lists a bucket and never accepts writes.
 - The emulator holds the Docker socket, which is root-equivalent on the host. The gateway and signature checks
   stop outsiders from reaching it, but anyone holding one of your access keys is effectively an admin. Treat keys
   like root credentials and revoke ones you no longer use.
+
+## Tunnel already running on the host?
+
+If `cloudflared` already runs as a service on the server, skip the Docker tunnel. Point its ingress at the loopback
+ports this stack publishes, then restart it:
+
+```yaml
+- hostname: aakash.<domain>        # dashboard
+  service: http://127.0.0.1:3050
+- hostname: aakash-api.<domain>    # AWS API (gateway)
+  service: http://127.0.0.1:4567
+- hostname: aakash-files.<domain>  # public files (gateway)
+  service: http://127.0.0.1:4567
+```
+
+Use single-level names such as `aakash-api.<domain>`: Cloudflare's free certificate covers `*.<domain>` but not
+`x.y.<domain>`. Until `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, the dashboard answers 503 to everything.

@@ -6,10 +6,16 @@
 # This is a standalone stack. Use it INSTEAD of docker-compose.yml, not together with it.
 # Setup guide: docs/DEPLOY-CLOUDFLARE.md
 #
-# Public hostnames to add to the tunnel (Cloudflare Zero Trust > Networks > Tunnels):
-#   aakash.<domain>  ->  http://dashboard:3050   protect with a Cloudflare Access application
-#   api.<domain>     ->  http://gateway:4567     NO Access policy: callers sign with SigV4
-#   files.<domain>   ->  http://gateway:4567     NO Access policy: anonymous read of public buckets only
+# Public hostnames the tunnel must route:
+#   aakash.<domain>  ->  dashboard   protect with a Cloudflare Access application
+#   api.<domain>     ->  gateway     NO Access policy: callers sign with SigV4
+#   files.<domain>   ->  gateway     NO Access policy: anonymous read of public buckets only
+#
+# Two ways to run the tunnel:
+#   * Tunnel already runs on this host (systemd): point its ingress at 127.0.0.1:3050 (dashboard)
+#     and 127.0.0.1:4567 (gateway). Nothing else to do; the cloudflared service below stays off.
+#   * Dedicated tunnel in Docker: set TUNNEL_TOKEN and start with `--profile tunnel`; then use the
+#     Docker names http://dashboard:3050 and http://gateway:4567 as the tunnel's service URLs.
 
 services:
   aakash:
@@ -46,6 +52,8 @@ services:
       context: ./gateway
     container_name: aakash-gateway
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:4567:4567" # loopback only, for a tunnel running on this host
     environment:
       GATEWAY_UPSTREAM: http://aakash:4566
       # Access keys created with scripts/create-api-key.sh (or the dashboard) are listed here.
@@ -68,10 +76,11 @@ services:
       - "127.0.0.1:3050:3050" # loopback only, for debugging over SSH
     environment:
       AAKASH_ENDPOINT: http://aakash:4566
-      # Every request must carry a valid Cloudflare Access token. Fails closed if unset.
+      # Every request must carry a valid Cloudflare Access token. While CF_ACCESS_* is empty the
+      # dashboard answers 503 to everything (fails closed) instead of opening up.
       AAKASH_AUTH_MODE: cloudflare
-      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:?Set CF_ACCESS_TEAM_DOMAIN in .env}
-      CF_ACCESS_AUD: ${CF_ACCESS_AUD:?Set CF_ACCESS_AUD in .env}
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
       AAKASH_ALLOWED_EMAILS: ${AAKASH_ALLOWED_EMAILS:-}
       # What the console prints in copyable snippets.
       AAKASH_PUBLIC_HOST: ${AAKASH_API_HOSTNAME:?Set AAKASH_API_HOSTNAME in .env}
@@ -89,10 +98,11 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: aakash-cloudflared
     restart: unless-stopped
+    profiles: ["tunnel"] # off unless you run `docker compose --profile tunnel up`
     command: tunnel --no-autoupdate run
     environment:
       # A dedicated tunnel for Aakash. Treat the token like a password: anyone holding it can run the tunnel.
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       - dashboard
       - gateway
