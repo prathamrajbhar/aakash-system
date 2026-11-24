@@ -78,7 +78,10 @@ services:
       AAKASH_ENDPOINT: http://aakash:4566
       # Every request must carry a valid Cloudflare Access token. While CF_ACCESS_* is empty the
       # dashboard answers 503 to everything (fails closed) instead of opening up.
-      AAKASH_AUTH_MODE: cloudflare
+      AAKASH_AUTH_MODE: ${AAKASH_AUTH_MODE:-cloudflare}
+      # Only for AAKASH_AUTH_MODE=password (see scripts/hash-password.mjs)
+      AAKASH_PASSWORD_HASH: ${AAKASH_PASSWORD_HASH:-}
+      AAKASH_SESSION_SECRET: ${AAKASH_SESSION_SECRET:-}
       CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
       CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
       AAKASH_ALLOWED_EMAILS: ${AAKASH_ALLOWED_EMAILS:-}

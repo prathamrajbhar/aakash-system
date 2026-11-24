@@ -9,6 +9,9 @@ export async function middleware(request: NextRequest) {
   const result = await authorizeRequest(request, readAuthConfig());
 
   if (!result.ok) {
+    if (result.code === "LoginRequired" && !request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: { code: result.code, message: result.message } },
@@ -29,6 +32,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Static bundles and the container liveness probe stay reachable without a token.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/healthz).*)"],
+  // Static bundles, the liveness probe and the login endpoints stay reachable without a token.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/healthz|api/auth/login|login).*)"],
 };
