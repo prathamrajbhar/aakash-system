@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSESClient } from "@/lib/aws/clients";
 import { handleAwsError } from "@/lib/aws/error-handler";
-import { readJson, validationError } from "@/lib/api/server";
 import { sendEmailSchema } from "@/lib/validations/ses";
 import { SendEmailCommand } from "@aws-sdk/client-ses";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await readJson(request);
+    const body = await request.json();
     const validation = sendEmailSchema.safeParse(body);
 
     if (!validation.success) {
-      return validationError(validation.error);
+      return NextResponse.json(
+        { error: { code: "ValidationError", message: validation.error.errors[0]?.message || "Invalid input" } },
+        { status: 400 }
+      );
     }
 
     const { source, destination, subject, bodyText, bodyHtml } = validation.data;

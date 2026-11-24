@@ -18,8 +18,10 @@ const SERVICES_SEARCH = [
   { name: "RDS - Relational Databases", href: "/rds" },
   { name: "EC2 - Virtual Compute", href: "/ec2" },
   { name: "ElastiCache - In-Memory Cache", href: "/elasticache" },
+  { name: "Lambda - Serverless Functions", href: "/lambda" },
+  { name: "SQS & SNS - Messaging", href: "/messaging" },
   { name: "SES - Simple Email Service", href: "/ses" },
-  { name: "DynamoDB - NoSQL Tables", href: "/dynamodb" },
+  { name: "Network & Access Settings", href: "/settings/network" },
 ];
 
 export function Header() {

@@ -13,7 +13,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
-import { apiFetch } from "@/lib/api/client";
 import {
   verifyEmailIdentitySchema,
   sendEmailSchema,
@@ -69,14 +68,14 @@ export default function SESPage() {
     identities: SESIdentityItem[];
   }>({
     queryKey: ["ses-identities"],
-    queryFn: () => apiFetch("/api/ses"),
+    queryFn: async () => (await fetch("/api/ses")).json(),
   });
 
   const { data: messagesData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery<{
     messages: CapturedEmailItem[];
   }>({
     queryKey: ["ses-messages"],
-    queryFn: () => apiFetch("/api/ses/messages"),
+    queryFn: async () => (await fetch("/api/ses/messages")).json(),
     refetchInterval: 5000,
   });
 

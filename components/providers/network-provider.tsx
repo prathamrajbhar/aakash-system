@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api/client";
 import type { AakashNetworkConfig, NetworkDiagnostics } from "@/lib/network-config/types";
 import {
   buildAakashApiEndpoint,
@@ -18,6 +17,9 @@ import {
 interface NetworkContextValue {
   config: AakashNetworkConfig;
   diagnostics?: NetworkDiagnostics;
+  isLocked: boolean;
+  isLoading: boolean;
+  refetch: () => Promise<unknown>;
   apiEndpoint: string;
   buildRds: (
     rawAddress?: string,
@@ -41,13 +43,18 @@ interface NetworkContextValue {
 }
 
 const DEFAULT_CONFIG: AakashNetworkConfig = {
+  mode: "local",
   protocol: "http",
   host: "localhost",
   apiPort: 4566,
+  updatedAt: new Date().toISOString(),
 };
 
 const NetworkContext = createContext<NetworkContextValue>({
   config: DEFAULT_CONFIG,
+  isLocked: false,
+  isLoading: false,
+  refetch: async () => {},
   apiEndpoint: "http://localhost:4566",
   buildRds: () => buildRdsConnectionDetails(undefined, 7001, "postgres", "postgres", "postgres", undefined, DEFAULT_CONFIG),
   buildEc2: (port: number) => buildEc2SshDetails(port, "root", undefined, undefined, DEFAULT_CONFIG),
@@ -56,37 +63,44 @@ const NetworkContext = createContext<NetworkContextValue>({
 });
 
 export function NetworkProvider({ children }: { children: React.ReactNode }) {
-  // The public host/port come from server env and are exposed via /api/health.
-  const { data } = useQuery({
-    queryKey: ["health"],
-    queryFn: () => apiFetch<{ diagnostics?: NetworkDiagnostics }>("/api/health"),
-    refetchInterval: 5000,
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["network-config"],
+    queryFn: async () => {
+      const res = await fetch("/api/network-config");
+      if (!res.ok) throw new Error("Failed to fetch network configuration");
+      return (await res.json()) as {
+        config: AakashNetworkConfig;
+        diagnostics: NetworkDiagnostics;
+        isLocked: boolean;
+      };
+    },
+    staleTime: 10000,
   });
 
+  const activeConfig = data?.config || DEFAULT_CONFIG;
+  const isLocked = Boolean(data?.isLocked);
   const diagnostics = data?.diagnostics;
-  const activeConfig = useMemo<AakashNetworkConfig>(
-    () =>
-      diagnostics
-        ? { protocol: diagnostics.protocol, host: diagnostics.host, apiPort: diagnostics.apiPort }
-        : DEFAULT_CONFIG,
-    [diagnostics]
-  );
 
-  const value = useMemo<NetworkContextValue>(
-    () => ({
+  const value = useMemo<NetworkContextValue>(() => {
+    const apiEndpoint = buildAakashApiEndpoint(activeConfig);
+    const awsCliSnippet = getAwsCliSnippet(activeConfig);
+
+    return {
       config: activeConfig,
       diagnostics,
-      apiEndpoint: buildAakashApiEndpoint(activeConfig),
+      isLocked,
+      isLoading,
+      refetch,
+      apiEndpoint,
       buildRds: (rawAddress, rawPort, engine, username, dbName, resourceId) =>
         buildRdsConnectionDetails(rawAddress, rawPort, engine, username, dbName, resourceId, activeConfig),
       buildEc2: (rawPort, user, rawPrivateIp, resourceId) =>
         buildEc2SshDetails(rawPort, user, rawPrivateIp, resourceId, activeConfig),
       buildElastiCache: (rawPort, resourceId) =>
         buildElastiCacheDetails(rawPort, resourceId, activeConfig),
-      awsCliSnippet: getAwsCliSnippet(activeConfig),
-    }),
-    [activeConfig, diagnostics]
-  );
+      awsCliSnippet,
+    };
+  }, [activeConfig, diagnostics, isLocked, isLoading, refetch]);
 
   return <NetworkContext.Provider value={value}>{children}</NetworkContext.Provider>;
 }

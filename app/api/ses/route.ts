@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSESClient } from "@/lib/aws/clients";
 import { handleAwsError } from "@/lib/aws/error-handler";
-import { missingParam, readJson, validationError } from "@/lib/api/server";
 import { verifyEmailIdentitySchema } from "@/lib/validations/ses";
 import {
   ListIdentitiesCommand,
@@ -33,8 +32,7 @@ export async function GET() {
 
     const items = identities.map((email) => ({
       email,
-      // Never claim "Success" when the status could not be read.
-      status: verificationAttributes[email]?.VerificationStatus || "Unknown",
+      status: verificationAttributes[email]?.VerificationStatus || "Success",
     }));
 
     return NextResponse.json({ identities: items, count: items.length });
@@ -45,11 +43,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await readJson(request);
+    const body = await request.json();
     const validation = verifyEmailIdentitySchema.safeParse(body);
 
     if (!validation.success) {
-      return validationError(validation.error);
+      return NextResponse.json(
+        { error: { code: "ValidationError", message: validation.error.errors[0]?.message || "Invalid input" } },
+        { status: 400 }
+      );
     }
 
     const { emailAddress } = validation.data;
@@ -76,7 +77,10 @@ export async function DELETE(request: NextRequest) {
     const emailAddress = searchParams.get("emailAddress");
 
     if (!emailAddress) {
-      return missingParam("emailAddress");
+      return NextResponse.json(
+        { error: { code: "ValidationError", message: "emailAddress parameter is required" } },
+        { status: 400 }
+      );
     }
 
     const ses = getSESClient();

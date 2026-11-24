@@ -1,4 +1,4 @@
-import { getEnvNetworkConfig } from "./network-config/env";
+import { networkConfigRepo } from "./network-config/repository";
 import type { AakashNetworkConfig, NetworkDiagnostics } from "./network-config/types";
 import {
   buildRdsConnectionDetails as buildRdsPure,
@@ -10,11 +10,13 @@ import {
 export * from "./aakash-network";
 
 export function getServerNetworkConfig(): AakashNetworkConfig {
-  return getEnvNetworkConfig();
+  return networkConfigRepo.get();
 }
 
 export function getServerNetworkDiagnostics(): NetworkDiagnostics {
-  return getNetworkDiagnosticsPure(getServerNetworkConfig());
+  const config = getServerNetworkConfig();
+  const isLocked = networkConfigRepo.isLocked();
+  return getNetworkDiagnosticsPure(config, isLocked);
 }
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "::"]);
@@ -42,23 +44,6 @@ function getEndpointHostname(): string | null {
   const endpointUrl = getEndpointUrl();
   if (!endpointUrl) return null;
   return endpointUrl.hostname.replace(/^\[|\]$/g, "") || null;
-}
-
-/**
- * Whether the connection tester may open a socket to `host`. The tester runs
- * server-side, so accepting any caller-supplied host would let it be used as a
- * port scanner against the internal network. Only loopback, the configured
- * public host and the emulator's own host are valid targets.
- */
-export function isAllowedProbeHost(host: string): boolean {
-  const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
-  if (!normalized) return false;
-  if (isLoopbackHost(normalized)) return true;
-
-  const allowed = new Set<string>([getServerNetworkConfig().host.toLowerCase()]);
-  const endpointHost = getEndpointHostname();
-  if (endpointHost) allowed.add(endpointHost.toLowerCase());
-  return allowed.has(normalized);
 }
 
 /**

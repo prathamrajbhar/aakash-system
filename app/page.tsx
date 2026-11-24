@@ -8,7 +8,6 @@ import { AwsServiceCards } from "@/components/dashboard/aws-service-cards";
 import { AwsHealthWidget } from "@/components/dashboard/aws-health-widget";
 import { AwsCliWidget } from "@/components/dashboard/aws-cli-widget";
 import { ErrorBanner } from "@/components/ui/error-banner";
-import { apiFetch, apiSend } from "@/lib/api/client";
 
 interface HealthApiResponse {
   status: "UP" | "DOWN";
@@ -28,19 +27,9 @@ interface HealthApiResponse {
   };
 }
 
-/** Fetches a list endpoint and returns the length of `field`, or 0 until loaded / on error. */
-function useResourceCount(queryKey: string, url: string, field: string): number {
-  const { data } = useQuery<Record<string, unknown>>({
-    queryKey: [queryKey],
-    queryFn: () => apiFetch<Record<string, unknown>>(url),
-  });
-  const items = data?.[field];
-  return Array.isArray(items) ? items.length : 0;
-}
-
 export default function DashboardPage() {
   const queryClient = useQueryClient();
-  const { apiEndpoint } = useNetworkConfig();
+  const { config: networkConfig, apiEndpoint } = useNetworkConfig();
   const [feedback, setFeedback] = useState<string | null>(null);
 
   // Health query
@@ -54,18 +43,64 @@ export default function DashboardPage() {
     refetchInterval: 5000,
   });
 
-  // Resource summaries (query keys are shared with each service page so a
-  // mutation there refreshes the home counters too).
-  const s3Count = useResourceCount("s3-buckets", "/api/s3", "buckets");
-  const rdsCount = useResourceCount("rds-instances", "/api/rds", "instances");
-  const ec2Count = useResourceCount("ec2-instances", "/api/ec2", "instances");
-  const elastiCacheCount = useResourceCount("elasticache-clusters", "/api/elasticache", "clusters");
-  const sesCount = useResourceCount("ses-identities", "/api/ses", "identities");
-  const dynamoCount = useResourceCount("dynamodb-tables", "/api/dynamodb", "tables");
+  // Resource summaries
+  const { data: s3Data } = useQuery({
+    queryKey: ["s3-buckets"],
+    queryFn: async () => (await fetch("/api/s3")).json(),
+  });
+
+  const { data: rdsData } = useQuery({
+    queryKey: ["rds-instances"],
+    queryFn: async () => (await fetch("/api/rds")).json(),
+  });
+
+  const { data: ec2Data } = useQuery({
+    queryKey: ["ec2-instances"],
+    queryFn: async () => (await fetch("/api/ec2")).json(),
+  });
+
+  const { data: elastiCacheData } = useQuery({
+    queryKey: ["elasticache-clusters"],
+    queryFn: async () => (await fetch("/api/elasticache")).json(),
+  });
+
+  const { data: lambdaData } = useQuery({
+    queryKey: ["lambda-functions"],
+    queryFn: async () => (await fetch("/api/lambda")).json(),
+  });
+
+  const { data: sqsData } = useQuery({
+    queryKey: ["sqs-queues"],
+    queryFn: async () => (await fetch("/api/sqs")).json(),
+  });
+
+  const { data: sesData } = useQuery({
+    queryKey: ["ses-identities"],
+    queryFn: async () => (await fetch("/api/ses")).json(),
+  });
+
+  const { data: dynamoData } = useQuery({
+    queryKey: ["dynamodb-tables"],
+    queryFn: async () => (await fetch("/api/dynamodb")).json(),
+  });
+
+  const { data: ssmData } = useQuery({
+    queryKey: ["ssm-parameters"],
+    queryFn: async () => (await fetch("/api/ssm")).json(),
+  });
+
+  const { data: cwData } = useQuery({
+    queryKey: ["cw-log-groups"],
+    queryFn: async () => (await fetch("/api/cloudwatch-logs")).json(),
+  });
 
   // State reset mutation
   const resetMutation = useMutation({
-    mutationFn: () => apiSend("/api/health", "POST"),
+    mutationFn: async () => {
+      const res = await fetch("/api/health", { method: "POST" });
+      if (!res.ok) throw new Error("State reset failed");
+      return res.json();
+    },
     onSuccess: () => {
       setFeedback("Aakash emulator state has been purged successfully.");
       queryClient.invalidateQueries();
@@ -78,12 +113,16 @@ export default function DashboardPage() {
 
   const isUp = health?.status === "UP";
   const counts = {
-    s3: s3Count,
-    rds: rdsCount,
-    ec2: ec2Count,
-    elasticache: elastiCacheCount,
-    ses: sesCount,
-    dynamodb: dynamoCount,
+    s3: s3Data?.buckets?.length || 0,
+    rds: rdsData?.instances?.length || 0,
+    ec2: ec2Data?.instances?.length || 0,
+    elasticache: elastiCacheData?.clusters?.length || 0,
+    lambda: lambdaData?.functions?.length || 0,
+    sqs: sqsData?.queues?.length || 0,
+    ses: sesData?.identities?.length || 0,
+    dynamodb: dynamoData?.tables?.length || 0,
+    ssm: ssmData?.parameters?.length || 0,
+    cloudwatch: cwData?.logGroups?.length || 0,
   };
 
   return (
@@ -93,6 +132,7 @@ export default function DashboardPage() {
         apiEndpoint={apiEndpoint}
         isUp={isUp}
         version={health?.version || "1.0.0"}
+        networkMode={networkConfig.mode}
       />
 
       {feedback ? (

@@ -226,7 +226,7 @@ export default function RDSPage() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900 tracking-tight">RDS Databases</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Manage PostgreSQL, MySQL, and MariaDB instances with ready-to-copy connection strings.
+            Manage PostgreSQL, MySQL, and MariaDB instances with {config.mode.toUpperCase()} access connection strings.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -270,7 +270,7 @@ export default function RDSPage() {
                     <th className="py-3 px-5">Identifier</th>
                     <th className="py-3 px-5">Engine</th>
                     <th className="py-3 px-5">Status</th>
-                    <th className="py-3 px-5">Endpoint</th>
+                    <th className="py-3 px-5">Endpoint ({config.mode.toUpperCase()})</th>
                     <th className="py-3 px-5">Class & Storage</th>
                     <th className="py-3 px-5 text-right">Actions</th>
                   </tr>
@@ -409,7 +409,7 @@ export default function RDSPage() {
           <DialogHeader>
             <DialogTitle>Create RDS Instance</DialogTitle>
             <DialogDescription>
-              Launch a relational database instance with proxy port mapping.
+              Launch a relational database instance with proxy port mapping ({config.mode.toUpperCase()} mode).
             </DialogDescription>
           </DialogHeader>
 
@@ -537,7 +537,7 @@ export default function RDSPage() {
           <DialogHeader>
             <DialogTitle>Connection Details</DialogTitle>
             <DialogDescription>
-              Connect to <span className="font-mono font-semibold text-slate-800">{viewConnectionInstance?.identifier}</span> from your machine.
+              Connect to <span className="font-mono font-semibold text-slate-800">{viewConnectionInstance?.identifier}</span> via {config.mode.toUpperCase()} access.
             </DialogDescription>
           </DialogHeader>
 
@@ -546,7 +546,7 @@ export default function RDSPage() {
               <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded text-blue-300 flex items-start gap-2">
                 <Shield className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong>Reachable at {viewConnectionInstance.endpoint}.</strong>
+                  <strong>Reachable at {viewConnectionInstance.endpoint} ({config.mode} mode).</strong>
                   <p className="text-[11px] text-blue-200/80 mt-0.5">Your instance master password is included directly in the connection commands below.</p>
                 </div>
               </div>

@@ -1,52 +1,61 @@
 import fs from "fs";
 import path from "path";
-import { logger } from "./logger";
 
 const CREDENTIALS_FILE = path.join(process.cwd(), "data", "rds-credentials.json");
 
-function readAll(): Record<string, string> {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, "utf-8"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      logger.warn({ err }, "Could not read RDS credential store; treating it as empty.");
-    }
-    return {};
-  }
-}
-
-/** Atomic write (temp file + rename) so a crash never leaves a half-written file. */
-function writeAll(data: Record<string, string>): void {
-  fs.mkdirSync(path.dirname(CREDENTIALS_FILE), { recursive: true });
-  const tmp = `${CREDENTIALS_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { encoding: "utf-8", mode: 0o600 });
-  fs.renameSync(tmp, CREDENTIALS_FILE);
-}
-
-/** Stored master password for an instance, or "postgres" if none was saved. */
+/**
+ * Retrieves the stored master password for an RDS instance identifier.
+ * Returns default "postgres" if none was saved.
+ */
 export function getRdsPassword(identifier: string): string {
-  const value = readAll()[identifier];
-  return value ? String(value) : "postgres";
+  try {
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, "utf-8"));
+      if (data && typeof data === "object" && data[identifier]) {
+        return String(data[identifier]);
+      }
+    }
+  } catch {
+    // Return default fallback on read failure
+  }
+  return "postgres";
 }
 
-/** Persists the master password. Failures are logged, never thrown. */
+/**
+ * Persists the master password locally for an RDS instance identifier.
+ */
 export function saveRdsPassword(identifier: string, password: string): void {
   try {
-    writeAll({ ...readAll(), [identifier]: password });
-  } catch (err) {
-    logger.error({ err, identifier }, "Failed to save RDS master password; the console will show the default.");
+    const dir = path.dirname(CREDENTIALS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    let data: Record<string, string> = {};
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      try {
+        data = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, "utf-8"));
+      } catch {
+        data = {};
+      }
+    }
+    data[identifier] = password;
+    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch {
+    // Ignore write errors
   }
 }
 
+/**
+ * Deletes stored credentials for a deleted RDS instance.
+ */
 export function deleteRdsPassword(identifier: string): void {
   try {
-    const data = readAll();
-    if (identifier in data) {
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, "utf-8"));
       delete data[identifier];
-      writeAll(data);
+      fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2), "utf-8");
     }
-  } catch (err) {
-    logger.error({ err, identifier }, "Failed to remove stored RDS password.");
+  } catch {
+    // Ignore delete errors
   }
 }

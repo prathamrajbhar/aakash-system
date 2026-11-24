@@ -40,10 +40,5 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # then drops to the unprivileged `nextjs` user before running the server.
 EXPOSE 3050
 
-# /api/healthz is the one route the auth middleware leaves open, so the probe
-# works in every auth mode and reveals nothing about the deployment.
-HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3050/api/healthz >/dev/null 2>&1 || exit 1
-
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "server.js"]

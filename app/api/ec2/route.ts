@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEC2Client } from "@/lib/aws/clients";
 import { handleAwsError } from "@/lib/aws/error-handler";
-import { readJson, validationError } from "@/lib/api/server";
-import { buildServerEc2Details, PORT_RANGES } from "@/lib/aakash-network-server";
+import { buildServerEc2Details } from "@/lib/aakash-network-server";
 import { launchEC2InstanceSchema } from "@/lib/validations/ec2";
 import {
   DescribeInstancesCommand,
@@ -29,45 +28,31 @@ export async function GET() {
       sshCommand: string;
     }> = [];
 
-    // The emulator exposes no per-instance SSH port, so hints are derived:
-    // live instances are numbered from the start of the SSH range in launch
-    // order. Terminated instances never consume a port, and the order does not
-    // depend on the order DescribeInstances happens to return.
-    const all = (response.Reservations || []).flatMap((r) => r.Instances || []);
-    const launchOrder = [...all]
-      .filter((i) => i.State?.Name !== "terminated" && i.State?.Name !== "shutting-down")
-      .sort(
-        (a, b) =>
-          (a.LaunchTime?.getTime() ?? 0) - (b.LaunchTime?.getTime() ?? 0) ||
-          (a.InstanceId || "").localeCompare(b.InstanceId || "")
-      );
-    const portFor = new Map(
-      launchOrder.map((inst, index) => [inst.InstanceId, PORT_RANGES.EC2_SSH_START + index])
-    );
+    let portOffset = 2200;
+    for (const reservation of response.Reservations || []) {
+      for (const instance of reservation.Instances || []) {
+        const instanceId = instance.InstanceId || "unknown";
+        const state = instance.State?.Name || "unknown";
+        const sshPort = portOffset++;
+        const privateIp = instance.PrivateIpAddress;
 
-    for (const instance of all) {
-      const instanceId = instance.InstanceId || "unknown";
-      const state = instance.State?.Name || "unknown";
-      const sshPort = portFor.get(instance.InstanceId) ?? 0;
-      const privateIp = instance.PrivateIpAddress;
-      const isLive = sshPort > 0;
+        // Build SSH details using server config
+        const sshDetails = buildServerEc2Details(sshPort, "root", privateIp, instanceId);
 
-      // Build SSH details using server config
-      const sshDetails = buildServerEc2Details(sshPort, "root", privateIp, instanceId);
-
-      instances.push({
-        instanceId,
-        state,
-        instanceType: instance.InstanceType || "t2.micro",
-        imageId: instance.ImageId || "",
-        launchTime: instance.LaunchTime,
-        publicIpAddress: instance.PublicIpAddress,
-        privateIpAddress: instance.PrivateIpAddress,
-        internalContainerAddress: sshDetails.internalContainerAddress,
-        sshPort: sshDetails.port,
-        isPortValid: isLive && sshDetails.isPortValid,
-        sshCommand: isLive ? sshDetails.sshCommand : "Instance terminated",
-      });
+        instances.push({
+          instanceId,
+          state,
+          instanceType: instance.InstanceType || "t2.micro",
+          imageId: instance.ImageId || "",
+          launchTime: instance.LaunchTime,
+          publicIpAddress: instance.PublicIpAddress,
+          privateIpAddress: instance.PrivateIpAddress,
+          internalContainerAddress: sshDetails.internalContainerAddress,
+          sshPort: sshDetails.port,
+          isPortValid: sshDetails.isPortValid,
+          sshCommand: sshDetails.sshCommand,
+        });
+      }
     }
 
     return NextResponse.json({ instances, count: instances.length });
@@ -78,11 +63,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await readJson(request);
+    const body = await request.json();
     const validation = launchEC2InstanceSchema.safeParse(body);
 
     if (!validation.success) {
-      return validationError(validation.error);
+      return NextResponse.json(
+        { error: { code: "ValidationError", message: validation.error.errors[0]?.message || "Invalid input" } },
+        { status: 400 }
+      );
     }
 
     const { imageId, instanceType, minCount, maxCount, keyName } = validation.data;

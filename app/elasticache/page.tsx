@@ -118,7 +118,7 @@ export default function ElastiCachePage() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900 tracking-tight">ElastiCache Clusters</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Provision Redis & Valkey in-memory caching clusters reachable from your machine.
+            Provision Redis & Valkey in-memory caching clusters reachable via {config.mode.toUpperCase()} access.
           </p>
         </div>
         <div className="flex items-center gap-2">

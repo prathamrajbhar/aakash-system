@@ -7,7 +7,11 @@ import {
   Database,
   Server,
   Zap,
+  Cpu,
+  MessageSquare,
   Mail,
+  Sliders,
+  Activity,
 } from "lucide-react";
 
 interface ServiceCounts {
@@ -15,8 +19,12 @@ interface ServiceCounts {
   rds: number;
   ec2: number;
   elasticache: number;
+  lambda: number;
+  sqs: number;
   ses: number;
   dynamodb?: number;
+  ssm?: number;
+  cloudwatch?: number;
 }
 
 export function AwsServiceCards({ counts }: { counts: ServiceCounts }) {
@@ -72,6 +80,26 @@ export function AwsServiceCards({ counts }: { counts: ServiceCounts }) {
       countLabel: `${counts.elasticache} Cluster${counts.elasticache === 1 ? "" : "s"}`,
     },
     {
+      name: "AWS Lambda",
+      tag: "Lambda",
+      category: "Serverless",
+      description: "Run event-driven serverless code with instant JSON payload testing.",
+      href: "/lambda",
+      icon: Cpu,
+      color: "text-orange-700 bg-orange-50 border-orange-200/80",
+      countLabel: `${counts.lambda} Function${counts.lambda === 1 ? "" : "s"}`,
+    },
+    {
+      name: "Amazon SQS & SNS",
+      tag: "Messaging",
+      category: "Integration",
+      description: "Decoupled message queues and pub/sub notification topics.",
+      href: "/messaging",
+      icon: MessageSquare,
+      color: "text-indigo-700 bg-indigo-50 border-indigo-200/80",
+      countLabel: `${counts.sqs} Queue${counts.sqs === 1 ? "" : "s"}`,
+    },
+    {
       name: "Amazon SES",
       tag: "SES",
       category: "Email",
@@ -81,6 +109,26 @@ export function AwsServiceCards({ counts }: { counts: ServiceCounts }) {
       color: "text-cyan-700 bg-cyan-50 border-cyan-200/80",
       countLabel: `${counts.ses} Identit${counts.ses === 1 ? "y" : "ies"}`,
     },
+    {
+      name: "SSM & Secrets",
+      tag: "SSM",
+      category: "Config",
+      description: "Parameter Store paths and Secrets Manager encrypted keys.",
+      href: "/ssm",
+      icon: Sliders,
+      color: "text-violet-700 bg-violet-50 border-violet-200/80",
+      countLabel: `${counts.ssm ?? 0} Key${(counts.ssm ?? 0) === 1 ? "" : "s"}`,
+    },
+    {
+      name: "CloudWatch Logs",
+      tag: "CloudWatch",
+      category: "Monitoring",
+      description: "Real-time log tailing, stream filtering, and log group manager.",
+      href: "/cloudwatch",
+      icon: Activity,
+      color: "text-emerald-700 bg-emerald-50 border-emerald-200/80",
+      countLabel: `${counts.cloudwatch ?? 0} Group${(counts.cloudwatch ?? 0) === 1 ? "" : "s"}`,
+    },
   ];
 
   return (
@@ -89,7 +137,7 @@ export function AwsServiceCards({ counts }: { counts: ServiceCounts }) {
         <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
           Core AWS Services
         </h2>
-        <span className="text-xs text-slate-400">6 Services Active</span>
+        <span className="text-xs text-slate-400">10 Services Active</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">

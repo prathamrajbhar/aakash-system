@@ -151,7 +151,7 @@ export default function EC2Page() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900 tracking-tight">EC2 Instances</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Launch virtual servers with port-forwarded SSH access (ports 2200–2299).
+            Launch virtual servers with {config.mode.toUpperCase()}-accessible port-forwarded SSH access (ports 2200–2299).
           </p>
         </div>
         <div className="flex items-center gap-2">

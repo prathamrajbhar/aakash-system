@@ -27,53 +27,35 @@ export interface ElastiCacheConnectionDetails {
   redisCliCommand: string;
 }
 
-function readPort(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
-}
-
-function readRange(startName: string, endName: string, defStart: number, defEnd: number) {
-  const start = readPort(startName, defStart);
-  const end = readPort(endName, defEnd);
-  // An inverted range is a misconfiguration: fall back to the defaults.
-  return start <= end ? { start, end } : { start: defStart, end: defEnd };
-}
-
-const rdsRange = readRange("AAKASH_RDS_PORT_RANGE_START", "AAKASH_RDS_PORT_RANGE_END", 7001, 7099);
-const ec2Range = readRange("AAKASH_EC2_SSH_PORT_RANGE_START", "AAKASH_EC2_SSH_PORT_RANGE_END", 2200, 2299);
-const cacheRange = readRange(
-  "AAKASH_ELASTICACHE_PORT_RANGE_START",
-  "AAKASH_ELASTICACHE_PORT_RANGE_END",
-  6379,
-  6399
-);
-
-// Port ranges the console treats as "reachable". Defaults match docker-compose.yml;
-// override them with the AAKASH_*_PORT_RANGE_* environment variables (server side).
+// Configured standard port ranges
 export const PORT_RANGES = {
-  RDS_START: rdsRange.start,
-  RDS_END: rdsRange.end,
-  EC2_SSH_START: ec2Range.start,
-  EC2_SSH_END: ec2Range.end,
-  ELASTICACHE_START: cacheRange.start,
-  ELASTICACHE_END: cacheRange.end,
+  RDS_START: 7001,
+  RDS_END: 7099,
+  EC2_SSH_START: 2200,
+  EC2_SSH_END: 2299,
+  ELASTICACHE_START: 6379,
+  ELASTICACHE_END: 6399,
 };
 
 export const DEFAULT_NETWORK_CONFIG: AakashNetworkConfig = {
+  mode: "local",
   protocol: "http",
   host: "localhost",
   apiPort: 4566,
+  updatedAt: "2026-09-04T00:00:00.000Z",
 };
 
 /**
  * Resolves active network config.
  */
 export function getActiveNetworkConfig(overrideConfig?: Partial<AakashNetworkConfig>): AakashNetworkConfig {
-  if (overrideConfig && overrideConfig.host) {
+  if (overrideConfig && overrideConfig.host && overrideConfig.mode) {
     return {
+      mode: overrideConfig.mode,
       protocol: overrideConfig.protocol || "http",
       host: overrideConfig.host,
       apiPort: overrideConfig.apiPort || 4566,
+      updatedAt: overrideConfig.updatedAt || new Date().toISOString(),
     };
   }
   return DEFAULT_NETWORK_CONFIG;
@@ -84,13 +66,7 @@ export function getActiveNetworkConfig(overrideConfig?: Partial<AakashNetworkCon
  */
 export function buildAakashApiEndpoint(config?: AakashNetworkConfig): string {
   const active = getActiveNetworkConfig(config);
-  // Behind a reverse proxy or tunnel the API is on the standard port, which URLs leave out.
-  const isDefaultPort =
-    (active.protocol === "https" && active.apiPort === 443) ||
-    (active.protocol === "http" && active.apiPort === 80);
-  return isDefaultPort
-    ? `${active.protocol}://${active.host}`
-    : `${active.protocol}://${active.host}:${active.apiPort}`;
+  return `${active.protocol}://${active.host}:${active.apiPort}`;
 }
 
 /**
@@ -237,21 +213,41 @@ export function getAwsCliSnippet(
 }
 
 /**
+ * Returns human-readable security notice based on the active network mode.
+ */
+export function getSecurityNotice(mode: AakashNetworkConfig["mode"]): string {
+  switch (mode) {
+    case "local":
+      return "Local machine mode: only this machine can access these services (isolated to localhost).";
+    case "lan":
+      return "LAN mode: devices on your allowed local network/Wi-Fi may be able to connect. Ensure your firewall and Docker ports are properly secured.";
+    case "tailscale":
+      return "Tailscale mode: only devices authenticated and connected to the same Tailscale tailnet can connect.";
+    case "custom":
+      return "Custom hostname mode: ensure your reverse proxy, VPN, firewall, TLS, and authentication are correctly configured.";
+  }
+}
+
+/**
  * Returns structured network diagnostics metadata.
  */
-export function getNetworkDiagnostics(config?: AakashNetworkConfig): NetworkDiagnostics {
+export function getNetworkDiagnostics(config?: AakashNetworkConfig, isLocked: boolean = false): NetworkDiagnostics {
   const active = getActiveNetworkConfig(config);
 
   return {
+    status: isLocked ? "locked" : "configured",
+    mode: active.mode,
     apiEndpoint: buildAakashApiEndpoint(active),
     host: active.host,
     protocol: active.protocol,
     apiPort: active.apiPort,
+    isLocked,
     portRanges: {
       rds: `${PORT_RANGES.RDS_START}–${PORT_RANGES.RDS_END}`,
       ec2Ssh: `${PORT_RANGES.EC2_SSH_START}–${PORT_RANGES.EC2_SSH_END}`,
       elastiCache: `${PORT_RANGES.ELASTICACHE_START}–${PORT_RANGES.ELASTICACHE_END}`,
     },
+    securityNotice: getSecurityNotice(active.mode),
   };
 }
 

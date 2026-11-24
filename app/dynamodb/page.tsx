@@ -16,7 +16,6 @@ import { ErrorBanner } from "@/components/ui/error-banner";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createTableSchema, type CreateTableInput } from "@/lib/validations/dynamodb";
-import { apiFetch } from "@/lib/api/client";
 
 interface DynamoTableItem {
   tableName: string;
@@ -47,7 +46,7 @@ export default function DynamoDBPage() {
 
   const { data, isLoading, error, refetch } = useQuery<{ tables: DynamoTableItem[] }>({
     queryKey: ["dynamodb-tables"],
-    queryFn: () => apiFetch("/api/dynamodb"),
+    queryFn: async () => (await fetch("/api/dynamodb")).json(),
   });
 
   const createMutation = useMutation({
