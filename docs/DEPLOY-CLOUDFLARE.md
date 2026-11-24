@@ -59,9 +59,11 @@ aws s3 presign s3://my-bucket/img/photo.png --expires-in 3600     # temporary li
 
 ### Public files
 
-A bucket is private until you attach a normal S3 bucket policy, exactly as on AWS:
+A bucket is private until you attach a normal S3 bucket policy, exactly as on AWS. Like AWS, new buckets have
+Block Public Access on, so a public policy fails with `AccessDenied` until you remove it for that bucket (verified on Floci 2.5.0):
 
 ```bash
+aws s3api delete-public-access-block --bucket my-bucket
 aws s3api put-bucket-policy --bucket my-bucket --policy '{
   "Version":"2012-10-17",
   "Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::my-bucket/img/*"}]
