@@ -20,12 +20,25 @@ if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
   exit 1
 fi
 
+# The dashboard container owns the data directory (uid 1001), so a normal user often cannot write
+# to it. Fall back to a throwaway container that mounts it.
+write_keys_file() { # reads the new file content on stdin
+  if [[ -w "$DATA_DIR" ]]; then
+    cat > "$KEYS_FILE.tmp" && chmod 644 "$KEYS_FILE.tmp" && mv "$KEYS_FILE.tmp" "$KEYS_FILE"
+  else
+    docker run --rm -i -v "$(cd "$DATA_DIR" && pwd):/data" alpine \
+      sh -c 'cat > /data/api-keys.json.tmp && chmod 644 /data/api-keys.json.tmp && mv /data/api-keys.json.tmp /data/api-keys.json'
+  fi
+}
+
 aws_cli() {
   # The emulator's dev credentials are accepted on the internal network only.
   docker run --rm --network "$NETWORK" \
     -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_DEFAULT_REGION=us-east-1 \
     amazon/aws-cli --endpoint-url "$ENDPOINT" "$@"
 }
+
+mkdir -p "$DATA_DIR"
 
 aws_cli iam get-user --user-name "$USER_NAME" >/dev/null 2>&1 \
   || aws_cli iam create-user --user-name "$USER_NAME" >/dev/null
@@ -39,19 +52,20 @@ if [[ ${#KEY_ID} -lt 16 ]]; then
 fi
 
 # Rebuild the allow-list: existing ids plus the new one. Only key ids are stored, never secrets.
-mkdir -p "$DATA_DIR"
 {
   echo '{"keys":['
-  if [[ -f "$KEYS_FILE" ]]; then
+  if [[ -r "$KEYS_FILE" ]]; then
     grep -o '"accessKeyId": *"[A-Za-z0-9]*"' "$KEYS_FILE" \
       | sed 's/.*"\([A-Za-z0-9]*\)"$/\1/' \
       | while read -r existing; do printf '  {"accessKeyId":"%s"},\n' "$existing"; done
   fi
   printf '  {"accessKeyId":"%s","label":"%s"}\n' "$KEY_ID" "${LABEL//[^A-Za-z0-9 _.-]/_}"
   echo ']}'
-} > "$KEYS_FILE.tmp"
-chmod 644 "$KEYS_FILE.tmp" # key ids only; the gateway runs as a different user and must read it
-mv "$KEYS_FILE.tmp" "$KEYS_FILE"
+} | write_keys_file || {
+  echo "Could not write $KEYS_FILE; revoking the key that was just created." >&2
+  aws_cli iam delete-access-key --user-name "$USER_NAME" --access-key-id "$KEY_ID" >/dev/null 2>&1 || true
+  exit 1
+}
 
 API_HOST="${AAKASH_API_HOSTNAME:-<your-api-hostname>}"
 cat <<EOF
