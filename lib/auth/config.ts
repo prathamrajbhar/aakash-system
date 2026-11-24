@@ -7,14 +7,12 @@
  *               this mode.
  *   cloudflare  Public use behind Cloudflare Access. Every request must carry a
  *               valid `Cf-Access-Jwt-Assertion` token issued for this app.
- *   password    Public use with Aakash's own login page. Needs AAKASH_PASSWORD_HASH
- *               (see scripts/hash-password.mjs) and AAKASH_SESSION_SECRET.
  *
  * Any other value is treated as a misconfiguration and fails closed, so a typo
  * such as "cloudfare" can never silently turn authentication off.
  */
 
-export type AuthMode = "none" | "cloudflare" | "password" | "invalid";
+export type AuthMode = "none" | "cloudflare" | "invalid";
 
 export interface AuthConfig {
   mode: AuthMode;
@@ -22,10 +20,6 @@ export interface AuthConfig {
   teamDomain: string | null;
   /** Application Audience (AUD) tag of the Access application. */
   audience: string | null;
-  /** `scrypt:<salt>:<hash>` of the dashboard password (password mode). */
-  passwordHash: string | null;
-  /** Random secret that signs session cookies (password mode). */
-  sessionSecret: string | null;
   /** Optional extra allow-list applied on top of the Access policy (lower-cased). */
   allowedEmails: string[];
   /** Extra origins accepted for browser write requests (besides the request's own host). */
@@ -57,16 +51,14 @@ export function readAuthConfig(env: Env = process.env): AuthConfig {
   const mode: AuthMode =
     rawMode === "" || rawMode === "none"
       ? "none"
-      : rawMode === "cloudflare" || rawMode === "password"
-        ? rawMode
+      : rawMode === "cloudflare"
+        ? "cloudflare"
         : "invalid";
 
   return {
     mode,
     teamDomain: normalizeTeamDomain(env.CF_ACCESS_TEAM_DOMAIN),
     audience: env.CF_ACCESS_AUD?.trim() || null,
-    passwordHash: env.AAKASH_PASSWORD_HASH?.trim() || null,
-    sessionSecret: env.AAKASH_SESSION_SECRET?.trim() || null,
     allowedEmails: splitList(env.AAKASH_ALLOWED_EMAILS).map((email) => email.toLowerCase()),
     extraOrigins: splitList(env.AAKASH_ALLOWED_ORIGINS).map((origin) => origin.replace(/\/+$/, "")),
   };

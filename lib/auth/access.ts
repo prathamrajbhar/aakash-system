@@ -1,6 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import type { AuthConfig } from "./config";
-import { SESSION_COOKIE, readCookie, verifySession } from "./session";
 
 /** Header Cloudflare Access adds to every request it forwards to the origin. */
 export const ACCESS_JWT_HEADER = "cf-access-jwt-assertion";
@@ -68,31 +67,12 @@ export async function authorizeRequest(
 ): Promise<AuthResult> {
   if (config.mode === "none") return { ok: true, email: null };
 
-  if (config.mode === "password") {
-    if (!config.passwordHash || !config.sessionSecret || config.sessionSecret.length < 32) {
-      return {
-        ok: false,
-        status: 503,
-        code: "AuthMisconfigured",
-        message: "AAKASH_PASSWORD_HASH and a 32+ character AAKASH_SESSION_SECRET must be set when AAKASH_AUTH_MODE=password.",
-      };
-    }
-    const session = readCookie(request.headers.get("cookie"), SESSION_COOKIE);
-    if (!session || !(await verifySession(config.sessionSecret, session))) {
-      return { ok: false, status: 401, code: "LoginRequired", message: "Login required." };
-    }
-    if (!SAFE_METHODS.has(request.method.toUpperCase()) && !isSameOriginRequest(request.headers, config.extraOrigins)) {
-      return { ok: false, status: 403, code: "CrossOriginBlocked", message: "Cross-origin write request blocked." };
-    }
-    return { ok: true, email: null };
-  }
-
   if (config.mode === "invalid") {
     return {
       ok: false,
       status: 503,
       code: "AuthMisconfigured",
-      message: "AAKASH_AUTH_MODE is invalid. Use \"none\", \"cloudflare\" or \"password\".",
+      message: "AAKASH_AUTH_MODE is invalid. Use \"none\" or \"cloudflare\".",
     };
   }
 
