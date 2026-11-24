@@ -1,4 +1,4 @@
-import { networkConfigRepo } from "./network-config/repository";
+import { getEnvNetworkConfig } from "./network-config/env";
 import type { AakashNetworkConfig, NetworkDiagnostics } from "./network-config/types";
 import {
   buildRdsConnectionDetails as buildRdsPure,
@@ -10,13 +10,11 @@ import {
 export * from "./aakash-network";
 
 export function getServerNetworkConfig(): AakashNetworkConfig {
-  return networkConfigRepo.get();
+  return getEnvNetworkConfig();
 }
 
 export function getServerNetworkDiagnostics(): NetworkDiagnostics {
-  const config = getServerNetworkConfig();
-  const isLocked = networkConfigRepo.isLocked();
-  return getNetworkDiagnosticsPure(config, isLocked);
+  return getNetworkDiagnosticsPure(getServerNetworkConfig());
 }
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "::"]);

@@ -23,8 +23,7 @@ export async function GET() {
       const body = await aakashResponse.json();
       return NextResponse.json({
         status: "UP",
-        networkStatus: diagnostics.mode,
-        publicEndpoint,
+                publicEndpoint,
         version: body.version || "1.0.0",
         services: body.services || {},
         uptime: body.uptime,
@@ -34,8 +33,7 @@ export async function GET() {
 
     return NextResponse.json({
       status: "DOWN",
-      networkStatus: diagnostics.mode,
-      publicEndpoint,
+            publicEndpoint,
       version: "unavailable",
       services: {},
       diagnostics,
@@ -43,8 +41,7 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json({
       status: "DOWN",
-      networkStatus: diagnostics.mode,
-      publicEndpoint,
+            publicEndpoint,
       version: "unavailable",
       error: error instanceof Error ? error.message : "Unreachable",
       diagnostics,
@@ -57,13 +54,18 @@ export async function POST() {
     const resetUrl = `${awsConfig.AAKASH_ENDPOINT}${BACKEND_PATHS.reset}`;
     const response = await fetch(resetUrl, {
       method: "POST",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
       return NextResponse.json(
-        { message: "State reset request sent (or Aakash returned non-200)" },
-        { status: 200 }
+        {
+          error: {
+            code: "ResetFailed",
+            message: `The emulator rejected the reset request (HTTP ${response.status}).`,
+          },
+        },
+        { status: 502 }
       );
     }
 

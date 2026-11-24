@@ -31,9 +31,7 @@ services:
       - "3050:3050"
     environment:
       - AAKASH_ENDPOINT=http://aakash:4566
-      - AAKASH_NETWORK_MODE=local
       - AAKASH_PUBLIC_HOST=localhost
-      - AAKASH_CONFIG_STORAGE_PATH=/app/data/aakash-ui-config.json
     volumes:
       - ./aakash-dashboard-data:/app/data
       - ${AAKASH_HOST_DATA_PATH:-./aakash-data}:/var/lib/floci:ro

@@ -9,16 +9,10 @@ import {
   HardDrive,
   Server,
   Zap,
-  Cpu,
-  MessageSquare,
   Mail,
-  Network,
   FolderGit2,
-  Sliders,
-  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNetworkConfig } from "@/components/providers/network-provider";
 
 interface NavItem {
   href: string;
@@ -47,32 +41,21 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Compute & Serverless",
+    title: "Compute",
     items: [
       { href: "/ec2", label: "EC2", subtitle: "Virtual Servers", icon: Server },
-      { href: "/lambda", label: "Lambda", subtitle: "Functions", icon: Cpu },
     ],
   },
   {
-    title: "Integration & Messaging",
+    title: "Email",
     items: [
-      { href: "/messaging", label: "SQS & SNS", subtitle: "Queues & Topics", icon: MessageSquare },
       { href: "/ses", label: "SES", subtitle: "Email Inbox", icon: Mail },
-    ],
-  },
-  {
-    title: "Config & Monitoring",
-    items: [
-      { href: "/ssm", label: "SSM & Secrets", subtitle: "Parameters", icon: Sliders },
-      { href: "/cloudwatch", label: "CloudWatch", subtitle: "Live Logs", icon: Activity },
-      { href: "/settings/network", label: "Network & Access", subtitle: "IP & Ports", icon: Network },
     ],
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { config } = useNetworkConfig();
 
   return (
     <aside className="w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full select-none">
@@ -120,12 +103,6 @@ export function Sidebar() {
 
       {/* Persistent Storage & Access Footer */}
       <div className="p-3 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-500 space-y-1.5">
-        <div className="flex items-center justify-between text-slate-700">
-          <span className="font-medium text-slate-500">Access Mode:</span>
-          <span className="uppercase text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-            {config.mode}
-          </span>
-        </div>
         <div className="flex items-center gap-1.5 text-slate-500 text-[10px] truncate" title="Data stored persistently on host filesystem">
           <FolderGit2 className="h-3 w-3 text-emerald-600 shrink-0" />
           <span className="truncate font-mono">./aakash-data</span>

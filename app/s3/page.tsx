@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { ApiError, apiFetch, apiSend } from "@/lib/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,9 +27,11 @@ interface BucketItem {
 
 export default function S3Page() {
   const queryClient = useQueryClient();
-  const { awsCliSnippet, apiEndpoint, config } = useNetworkConfig();
+  const { awsCliSnippet, apiEndpoint } = useNetworkConfig();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [bucketToDelete, setBucketToDelete] = useState<string | null>(null);
+  // Set when a delete failed because the bucket still has objects.
+  const [bucketToForceDelete, setBucketToForceDelete] = useState<string | null>(null);
   const [showCliSnippet, setShowCliSnippet] = useState(false);
 
   const {
@@ -47,14 +50,7 @@ export default function S3Page() {
     refetch,
   } = useQuery<{ buckets: BucketItem[] }>({
     queryKey: ["s3-buckets"],
-    queryFn: async () => {
-      const res = await fetch("/api/s3");
-      if (!res.ok) {
-        const err = await res.json();
-        throw err;
-      }
-      return res.json();
-    },
+    queryFn: () => apiFetch("/api/s3"),
   });
 
   const createMutation = useMutation({
@@ -78,21 +74,19 @@ export default function S3Page() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (bucketName: string) => {
-      const res = await fetch("/api/s3", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bucketName }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw err;
-      }
-      return res.json();
-    },
+    mutationFn: ({ bucketName, force }: { bucketName: string; force?: boolean }) =>
+      apiSend("/api/s3", "DELETE", { bucketName, force }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["s3-buckets"] });
       setBucketToDelete(null);
+      setBucketToForceDelete(null);
+    },
+    onError: (err, { bucketName, force }) => {
+      // Real S3 refuses to delete a non-empty bucket: offer to empty it first.
+      if (!force && err instanceof ApiError && err.code === "BucketNotEmpty") {
+        setBucketToDelete(null);
+        setBucketToForceDelete(bucketName);
+      }
     },
   });
 
@@ -215,7 +209,7 @@ export default function S3Page() {
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 flex items-start gap-2 text-xs">
               <Shield className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
               <span>
-                These environment variables point the AWS CLI directly to your configured <span className="font-semibold uppercase text-blue-900">{config.mode}</span> endpoint at <code className="font-mono font-semibold text-slate-900">{apiEndpoint}</code>.
+                These environment variables point the AWS CLI directly to your endpoint at <code className="font-mono font-semibold text-slate-900">{apiEndpoint}</code>.
               </span>
             </div>
 
@@ -276,12 +270,28 @@ export default function S3Page() {
         open={Boolean(bucketToDelete)}
         onOpenChange={(open) => !open && setBucketToDelete(null)}
         title={`Delete Bucket "${bucketToDelete}"?`}
-        description="Are you sure you want to delete this bucket? Aakash requires the bucket to be empty before deleting."
+        description="Are you sure you want to delete this bucket? If it still contains objects you will be asked whether to empty it first."
         confirmLabel="Delete Bucket"
         variant="destructive"
         isLoading={deleteMutation.isPending}
-        onConfirm={() => bucketToDelete && deleteMutation.mutate(bucketToDelete)}
+        onConfirm={() => bucketToDelete && deleteMutation.mutate({ bucketName: bucketToDelete })}
       />
+
+      <ConfirmDialog
+        open={Boolean(bucketToForceDelete)}
+        onOpenChange={(open) => !open && setBucketToForceDelete(null)}
+        title={`Bucket "${bucketToForceDelete}" is not empty`}
+        description="Delete every object in this bucket, then delete the bucket itself? This cannot be undone."
+        confirmLabel="Empty & Delete"
+        variant="destructive"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() =>
+          bucketToForceDelete && deleteMutation.mutate({ bucketName: bucketToForceDelete, force: true })
+        }
+      />
+      {deleteMutation.error && !bucketToForceDelete ? (
+        <ErrorBanner error={deleteMutation.error} />
+      ) : null}
     </div>
   );
 }

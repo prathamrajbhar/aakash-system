@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  ListTablesCommand,
   DescribeTableCommand,
   CreateTableCommand,
   DeleteTableCommand,
+  paginateListTables,
   type KeySchemaElement,
   type AttributeDefinition,
 } from "@aws-sdk/client-dynamodb";
 import { getDynamoDBClient } from "@/lib/aws/clients";
 import { handleAwsError } from "@/lib/aws/error-handler";
+import { missingParam, readJson, validationError } from "@/lib/api/server";
 import { createTableSchema } from "@/lib/validations/dynamodb";
 
 export async function GET() {
   try {
     const client = getDynamoDBClient();
-    const listRes = await client.send(new ListTablesCommand({}));
-    const tableNames = listRes.TableNames || [];
+    // ListTables returns at most 100 names per page — follow every page.
+    const tableNames: string[] = [];
+    for await (const page of paginateListTables({ client }, {})) {
+      tableNames.push(...(page.TableNames || []));
+    }
 
     const tables = await Promise.all(
       tableNames.map(async (name) => {
@@ -52,14 +56,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJson(request);
     const validation = createTableSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json(
-        { error: { code: "ValidationError", message: validation.error.errors[0]?.message || "Invalid input" } },
-        { status: 400 }
-      );
+      return validationError(validation.error);
     }
 
     const { tableName, partitionKeyName, partitionKeyType, sortKeyName, sortKeyType, billingMode } = validation.data;
@@ -83,6 +84,10 @@ export async function POST(request: NextRequest) {
       KeySchema: keySchema,
       AttributeDefinitions: attributeDefinitions,
       BillingMode: billingMode,
+      // Real DynamoDB rejects PROVISIONED tables that omit throughput.
+      ...(billingMode === "PROVISIONED"
+        ? { ProvisionedThroughput: { ReadCapacityUnits: 5, WriteCapacityUnits: 5 } }
+        : {}),
     });
 
     await client.send(command);
@@ -106,10 +111,7 @@ export async function DELETE(request: NextRequest) {
     const tableName = searchParams.get("tableName");
 
     if (!tableName) {
-      return NextResponse.json(
-        { error: { code: "ValidationError", message: "tableName query parameter is required" } },
-        { status: 400 }
-      );
+      return missingParam("tableName");
     }
 
     const client = getDynamoDBClient();

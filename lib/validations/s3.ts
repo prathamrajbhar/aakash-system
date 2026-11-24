@@ -15,6 +15,8 @@ export type CreateBucketInput = z.infer<typeof createBucketSchema>;
 
 export const deleteBucketSchema = z.object({
   bucketName: z.string().min(1, "Bucket name is required"),
+  // Empty the bucket first. Without it, deleting a non-empty bucket fails like real S3.
+  force: z.boolean().optional(),
 });
 
 export type DeleteBucketInput = z.infer<typeof deleteBucketSchema>;

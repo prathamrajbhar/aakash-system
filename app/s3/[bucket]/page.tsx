@@ -12,6 +12,7 @@ import {
   ChevronRight,
   RefreshCw,
   ExternalLink,
+  Folder,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CopyButton } from "@/components/ui/copy-button";
 import { formatBytes, formatDate } from "@/lib/utils";
+import { apiFetch, apiSend, parseApiError } from "@/lib/api/client";
 
 interface S3ObjectItem {
   key: string;
@@ -34,6 +36,7 @@ interface S3ObjectItem {
 interface S3ObjectsResponse {
   bucket: string;
   objects: S3ObjectItem[];
+  prefixes: string[];
   isTruncated: boolean;
   nextContinuationToken: string | null;
 }
@@ -47,10 +50,13 @@ export default function BucketDetailPage({
   const bucketName = resolvedParams.bucket;
   const queryClient = useQueryClient();
 
+  // Current "folder" (S3 key prefix, always "" or ending in "/").
+  const [prefix, setPrefix] = useState("");
   const [continuationToken, setContinuationToken] = useState<string | undefined>(undefined);
   const [tokenHistory, setTokenHistory] = useState<string[]>([]);
   const [objectToDelete, setObjectToDelete] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const {
@@ -60,61 +66,60 @@ export default function BucketDetailPage({
     refetch,
     isFetching,
   } = useQuery<S3ObjectsResponse>({
-    queryKey: ["s3-objects", bucketName, continuationToken],
-    queryFn: async () => {
-      const url = new URL(`/api/s3/${bucketName}/objects`, window.location.origin);
-      if (continuationToken) {
-        url.searchParams.set("continuationToken", continuationToken);
-      }
-      const res = await fetch(url.toString());
-      if (!res.ok) {
-        const err = await res.json();
-        throw err;
-      }
-      return res.json();
+    queryKey: ["s3-objects", bucketName, prefix, continuationToken],
+    queryFn: () => {
+      const qs = new URLSearchParams({ delimiter: "/" });
+      if (prefix) qs.set("prefix", prefix);
+      if (continuationToken) qs.set("continuationToken", continuationToken);
+      return apiFetch<S3ObjectsResponse>(
+        `/api/s3/${encodeURIComponent(bucketName)}/objects?${qs.toString()}`
+      );
     },
   });
 
+  const openFolder = (nextPrefix: string) => {
+    setPrefix(nextPrefix);
+    setContinuationToken(undefined);
+    setTokenHistory([]);
+  };
+
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      setUploadProgress(`Uploading ${file.name}...`);
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("key", file.name);
-
-      const res = await fetch(`/api/s3/${bucketName}/objects`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw err;
+    mutationFn: async (files: File[]) => {
+      const failures: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setUploadProgress(`Uploading ${file.name} (${i + 1}/${files.length})...`);
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("key", `${prefix}${file.name}`);
+        const res = await fetch(`/api/s3/${encodeURIComponent(bucketName)}/objects`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) {
+          failures.push(`${file.name}: ${(await parseApiError(res)).message}`);
+        }
       }
-      return res.json();
+      if (failures.length > 0) {
+        throw new Error(`Upload failed for ${failures.length} file(s). ${failures.join("; ")}`);
+      }
+      return files.length;
     },
     onSuccess: () => {
       setUploadProgress(null);
       queryClient.invalidateQueries({ queryKey: ["s3-objects", bucketName] });
     },
-    onError: (err: { error?: { message?: string }; message?: string }) => {
-      setUploadProgress(`Upload error: ${err.error?.message || err.message}`);
+    onError: (err: Error) => {
+      setUploadProgress(null);
+      queryClient.invalidateQueries({ queryKey: ["s3-objects", bucketName] });
+      setUploadError(err.message);
     },
+    onMutate: () => setUploadError(null),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (key: string) => {
-      const res = await fetch(`/api/s3/${bucketName}/objects`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw err;
-      }
-      return res.json();
-    },
+    mutationFn: (key: string) =>
+      apiSend(`/api/s3/${encodeURIComponent(bucketName)}/objects`, "DELETE", { key }),
     onSuccess: () => {
       setObjectToDelete(null);
       queryClient.invalidateQueries({ queryKey: ["s3-objects", bucketName] });
@@ -122,18 +127,19 @@ export default function BucketDetailPage({
   });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      uploadMutation.mutate(file);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) {
+      uploadMutation.mutate(files);
     }
+    e.target.value = ""; // allow re-selecting the same file
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      uploadMutation.mutate(file);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length > 0) {
+      uploadMutation.mutate(files);
     }
   };
 
@@ -152,6 +158,11 @@ export default function BucketDetailPage({
   };
 
   const objects = data?.objects || [];
+  const folders = data?.prefixes || [];
+  const crumbs = prefix
+    .split("/")
+    .filter(Boolean)
+    .map((name, i, parts) => ({ name, prefix: parts.slice(0, i + 1).join("/") + "/" }));
 
   return (
     <div className="space-y-6">
@@ -177,6 +188,7 @@ export default function BucketDetailPage({
           <label>
             <input
               type="file"
+              multiple
               className="hidden"
               onChange={handleFileUpload}
               disabled={uploadMutation.isPending}
@@ -193,7 +205,24 @@ export default function BucketDetailPage({
         </div>
       </div>
 
+      {/* Folder breadcrumb */}
+      <nav className="flex flex-wrap items-center gap-1 text-xs font-mono text-slate-600" aria-label="Folder path">
+        <button type="button" onClick={() => openFolder("")} className="hover:text-slate-900 hover:underline">
+          {bucketName}
+        </button>
+        {crumbs.map((c) => (
+          <React.Fragment key={c.prefix}>
+            <ChevronRight className="h-3 w-3 text-slate-400" />
+            <button type="button" onClick={() => openFolder(c.prefix)} className="hover:text-slate-900 hover:underline">
+              {c.name}
+            </button>
+          </React.Fragment>
+        ))}
+      </nav>
+
       {error ? <ErrorBanner error={error} onRetry={() => refetch()} /> : null}
+      {uploadError ? <ErrorBanner error={uploadError} /> : null}
+      {deleteMutation.error ? <ErrorBanner error={deleteMutation.error} /> : null}
 
       {/* Upload Drag and Drop Zone */}
       <div
@@ -208,7 +237,7 @@ export default function BucketDetailPage({
         }`}
       >
         <p className="text-xs font-medium text-slate-800">
-          Drag & drop files here to upload directly to <span className="font-mono text-slate-900">{bucketName}</span>
+          Drag & drop files here to upload to <span className="font-mono text-slate-900">{bucketName}/{prefix}</span>
         </p>
         <p className="text-[11px] text-slate-500 mt-1">Files are stored locally in the Aakash emulator volume</p>
         {uploadProgress ? (
@@ -221,16 +250,16 @@ export default function BucketDetailPage({
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Bucket Objects</CardTitle>
-            <CardDescription>Listing objects with pagination tokens</CardDescription>
+            <CardDescription>{folders.length} folder(s), {objects.length} object(s) on this page</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <LoadingSpinner message="Fetching objects..." />
-          ) : objects.length === 0 ? (
+          ) : objects.length === 0 && folders.length === 0 ? (
             <div className="p-6">
               <EmptyState
-                title="Bucket is empty"
+                title={prefix ? "This folder is empty" : "Bucket is empty"}
                 description="Upload an object to get started."
               />
             </div>
@@ -247,11 +276,25 @@ export default function BucketDetailPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
+                  {folders.map((folder) => (
+                    <tr key={folder} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 px-5 font-mono text-xs text-slate-900 font-medium" colSpan={5}>
+                        <button
+                          type="button"
+                          onClick={() => openFolder(folder)}
+                          className="flex items-center gap-2 hover:underline underline-offset-2"
+                        >
+                          <Folder className="h-4 w-4 text-amber-500 shrink-0" />
+                          <span>{folder.slice(prefix.length)}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                   {objects.map((obj) => (
                     <tr key={obj.key} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-5 font-mono text-xs text-slate-900 font-medium">
                         <a
-                          href={`/api/s3/${bucketName}/objects/download?key=${encodeURIComponent(
+                          href={`/api/s3/${encodeURIComponent(bucketName)}/objects/download?key=${encodeURIComponent(
                             obj.key
                           )}&inline=true`}
                           target="_blank"
@@ -260,7 +303,7 @@ export default function BucketDetailPage({
                           title="Open in new tab"
                         >
                           <FileText className="h-4 w-4 text-slate-400 group-hover:text-slate-900 shrink-0" />
-                          <span className="truncate max-w-xs underline-offset-2 group-hover:underline">{obj.key}</span>
+                          <span className="truncate max-w-xs underline-offset-2 group-hover:underline" title={obj.key}>{obj.key.slice(prefix.length)}</span>
                         </a>
                       </td>
                       <td className="py-3.5 px-5 text-xs text-slate-500 font-mono">{formatBytes(obj.size)}</td>
@@ -271,7 +314,7 @@ export default function BucketDetailPage({
                       <td className="py-3.5 px-5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <a
-                            href={`/api/s3/${bucketName}/objects/download?key=${encodeURIComponent(
+                            href={`/api/s3/${encodeURIComponent(bucketName)}/objects/download?key=${encodeURIComponent(
                               obj.key
                             )}&inline=true`}
                             target="_blank"
@@ -283,7 +326,7 @@ export default function BucketDetailPage({
                           </a>
                           <CopyButton text={obj.s3Uri} label="URI" />
                           <a
-                            href={`/api/s3/${bucketName}/objects/download?key=${encodeURIComponent(
+                            href={`/api/s3/${encodeURIComponent(bucketName)}/objects/download?key=${encodeURIComponent(
                               obj.key
                             )}`}
                             download

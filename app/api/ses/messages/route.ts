@@ -24,6 +24,10 @@ interface RawSesEmailRecord {
   SentAt?: string;
 }
 
+function newestFirst(list: CapturedEmail[]): CapturedEmail[] {
+  return [...list].sort((a, b) => Date.parse(b.timestamp || "") - Date.parse(a.timestamp || ""));
+}
+
 export async function GET() {
   try {
     const inspectionUrl = `${awsConfig.AAKASH_ENDPOINT}${BACKEND_PATHS.sesMessages}`;
@@ -36,8 +40,8 @@ export async function GET() {
 
     if (response.ok) {
       const body = await response.json();
-      const messages = Array.isArray(body) ? body : body.messages || [];
-      return NextResponse.json({ messages, count: messages.length });
+      const raw: CapturedEmail[] = Array.isArray(body) ? body : body.messages || [];
+      return NextResponse.json({ messages: newestFirst(raw), count: raw.length });
     }
   } catch {
     // Fall back to reading storage directory below
@@ -64,7 +68,7 @@ export async function GET() {
           bodyHtml: raw.BodyHtml || undefined,
           timestamp: raw.SentAt || new Date().toISOString(),
         }));
-        return NextResponse.json({ messages, count: messages.length });
+        return NextResponse.json({ messages: newestFirst(messages), count: messages.length });
       } catch {
         // Continue to next candidate path
       }

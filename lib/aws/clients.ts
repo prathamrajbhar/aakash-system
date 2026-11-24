@@ -2,14 +2,8 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { RDSClient } from "@aws-sdk/client-rds";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { ElastiCacheClient } from "@aws-sdk/client-elasticache";
-import { LambdaClient } from "@aws-sdk/client-lambda";
-import { SQSClient } from "@aws-sdk/client-sqs";
-import { SNSClient } from "@aws-sdk/client-sns";
 import { SESClient } from "@aws-sdk/client-ses";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { SSMClient } from "@aws-sdk/client-ssm";
-import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
-import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { awsConfig } from "./config";
 
 function getBaseClientConfig() {
@@ -22,58 +16,64 @@ function getBaseClientConfig() {
       secretAccessKey: awsConfig.AWS_SECRET_ACCESS_KEY,
     },
     ...(isAakashEndpoint ? { endpoint: awsConfig.AAKASH_ENDPOINT } : {}),
-    maxAttempts: 5,
-    retryMode: "adaptive" as const,
+    // Fail fast when the emulator is down instead of retrying for many seconds.
+    maxAttempts: 3,
   };
 }
 
+/**
+ * AWS SDK clients are cheap to share and expensive to recreate (each owns an
+ * HTTP connection pool). Cache one instance per service on `globalThis` so
+ * they also survive Next.js dev-server module reloads without leaking sockets.
+ */
+type ClientCache = Map<string, unknown>;
+const globalCache = globalThis as typeof globalThis & { __aakashAwsClients?: ClientCache };
+
+/**
+ * Returns the cached client for `key`, rebuilding it when the cached instance
+ * was created by a different copy of the SDK class (happens after a Next.js
+ * hot reload, and breaks the SDK paginators' `instanceof` checks).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ClientCtor<T> = abstract new (...args: any[]) => T;
+
+function cached<T extends object>(key: string, Ctor: ClientCtor<T>, create: () => T): T {
+  const store = (globalCache.__aakashAwsClients ??= new Map());
+  const existing = store.get(key);
+  if (existing instanceof Ctor) return existing;
+  const client = create();
+  store.set(key, client);
+  return client;
+}
+
 export function getS3Client(): S3Client {
-  return new S3Client({
-    ...getBaseClientConfig(),
-    forcePathStyle: true, // Required for local S3 emulation
-  });
+  return cached(
+    "s3",
+    S3Client,
+    () =>
+      new S3Client({
+        ...getBaseClientConfig(),
+        forcePathStyle: true, // Required for local S3 emulation
+      })
+  );
 }
 
 export function getRDSClient(): RDSClient {
-  return new RDSClient(getBaseClientConfig());
+  return cached("rds", RDSClient, () => new RDSClient(getBaseClientConfig()));
 }
 
 export function getEC2Client(): EC2Client {
-  return new EC2Client(getBaseClientConfig());
+  return cached("ec2", EC2Client, () => new EC2Client(getBaseClientConfig()));
 }
 
 export function getElastiCacheClient(): ElastiCacheClient {
-  return new ElastiCacheClient(getBaseClientConfig());
-}
-
-export function getLambdaClient(): LambdaClient {
-  return new LambdaClient(getBaseClientConfig());
-}
-
-export function getSQSClient(): SQSClient {
-  return new SQSClient(getBaseClientConfig());
-}
-
-export function getSNSClient(): SNSClient {
-  return new SNSClient(getBaseClientConfig());
+  return cached("elasticache", ElastiCacheClient, () => new ElastiCacheClient(getBaseClientConfig()));
 }
 
 export function getSESClient(): SESClient {
-  return new SESClient(getBaseClientConfig());
+  return cached("ses", SESClient, () => new SESClient(getBaseClientConfig()));
 }
 
 export function getDynamoDBClient(): DynamoDBClient {
-  return new DynamoDBClient(getBaseClientConfig());
-}
-
-export function getSSMClient(): SSMClient {
-  return new SSMClient(getBaseClientConfig());
-}
-
-export function getSecretsManagerClient(): SecretsManagerClient {
-  return new SecretsManagerClient(getBaseClientConfig());
-}
-
-export function getCloudWatchLogsClient(): CloudWatchLogsClient {
-  return new CloudWatchLogsClient(getBaseClientConfig());
+  return cached("dynamodb", DynamoDBClient, () => new DynamoDBClient(getBaseClientConfig()));
 }

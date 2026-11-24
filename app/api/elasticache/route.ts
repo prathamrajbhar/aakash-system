@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getElastiCacheClient } from "@/lib/aws/clients";
 import { handleAwsError } from "@/lib/aws/error-handler";
+import { readJson, validationError } from "@/lib/api/server";
 import { buildServerElastiCacheDetails } from "@/lib/aakash-network-server";
 import {
   createCacheClusterSchema,
@@ -95,8 +96,11 @@ export async function GET() {
           continue;
         }
 
+        // Standalone Redis/Valkey nodes expose their endpoint on CacheNodes;
+        // ConfigurationEndpoint only exists for cluster-mode / Memcached.
         const port =
           cluster.ConfigurationEndpoint?.Port ||
+          cluster.CacheNodes?.[0]?.Endpoint?.Port ||
           (cluster.Engine === "memcached" ? 11211 : 6379);
 
         const cacheDetails = buildServerElastiCacheDetails(port, clusterId);
@@ -129,19 +133,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJson(request);
     const validation = createCacheClusterSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "ValidationError",
-            message: validation.error.errors[0]?.message || "Invalid input",
-          },
-        },
-        { status: 400 }
-      );
+      return validationError(validation.error);
     }
 
     const { cacheClusterId, engine, cacheNodeType, numCacheNodes, description } =
@@ -194,19 +190,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJson(request);
     const validation = deleteCacheClusterSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "ValidationError",
-            message: validation.error.errors[0]?.message || "Invalid input",
-          },
-        },
-        { status: 400 }
-      );
+      return validationError(validation.error);
     }
 
     const { cacheClusterId } = validation.data;

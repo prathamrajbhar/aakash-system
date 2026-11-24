@@ -1,23 +1,16 @@
 import { z } from "zod";
-import { isUnsafeHost } from "../network-config/validation";
 
 export const envSchema = z.object({
   AAKASH_ENDPOINT: z
     .string()
     .url("AAKASH_ENDPOINT must be a valid URL")
     .default("http://localhost:4566"),
-  AAKASH_NETWORK_MODE: z.enum(["local", "lan", "tailscale", "custom"]).default("local"),
   AAKASH_PUBLIC_HOST: z
     .string()
     .min(1, "AAKASH_PUBLIC_HOST is required")
-    .refine((host) => !isUnsafeHost(host), {
-      message: "AAKASH_PUBLIC_HOST must not target cloud metadata or contain dangerous characters.",
-    })
     .default("localhost"),
   AAKASH_PUBLIC_PROTOCOL: z.enum(["http", "https"]).default("http"),
   AAKASH_API_PORT: z.coerce.number().int().min(1).max(65535).default(4566),
-  AAKASH_CONFIG_LOCKED: z.coerce.boolean().default(false),
-  AAKASH_CONFIG_STORAGE_PATH: z.string().default("./data/aakash-ui-config.json"),
   AAKASH_RDS_PORT_RANGE_START: z.coerce.number().int().min(1024).max(65535).default(7001),
   AAKASH_RDS_PORT_RANGE_END: z.coerce.number().int().min(1024).max(65535).default(7099),
   AAKASH_EC2_SSH_PORT_RANGE_START: z.coerce.number().int().min(1024).max(65535).default(2200),
@@ -37,13 +30,10 @@ export function getValidatedConfig(customEnv?: Record<string, string | undefined
 
   const result = envSchema.safeParse({
     AAKASH_ENDPOINT: envSource.AAKASH_ENDPOINT || "http://localhost:4566",
-    AAKASH_NETWORK_MODE: envSource.AAKASH_NETWORK_MODE || "local",
     AAKASH_PUBLIC_HOST: envSource.AAKASH_PUBLIC_HOST || "localhost",
     AAKASH_PUBLIC_PROTOCOL: envSource.AAKASH_PUBLIC_PROTOCOL || "http",
     AAKASH_API_PORT: envSource.AAKASH_API_PORT || 4566,
-    AAKASH_CONFIG_LOCKED: envSource.AAKASH_CONFIG_LOCKED === "true" || envSource.AAKASH_CONFIG_LOCKED === "1",
-    AAKASH_CONFIG_STORAGE_PATH: envSource.AAKASH_CONFIG_STORAGE_PATH || "./data/aakash-ui-config.json",
-    AAKASH_RDS_PORT_RANGE_START: envSource.AAKASH_RDS_PORT_RANGE_START || 7001,
+        AAKASH_RDS_PORT_RANGE_START: envSource.AAKASH_RDS_PORT_RANGE_START || 7001,
     AAKASH_RDS_PORT_RANGE_END: envSource.AAKASH_RDS_PORT_RANGE_END || 7099,
     AAKASH_EC2_SSH_PORT_RANGE_START: envSource.AAKASH_EC2_SSH_PORT_RANGE_START || 2200,
     AAKASH_EC2_SSH_PORT_RANGE_END: envSource.AAKASH_EC2_SSH_PORT_RANGE_END || 2299,

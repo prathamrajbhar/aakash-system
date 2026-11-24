@@ -58,18 +58,13 @@ irm https://raw.githubusercontent.com/prathamrajbhar/aakash-system/main/uninstal
 
 ## 🌟 Supported AWS Services
 
-Aakash provides first-class API coverage and interactive visual management for **10 core AWS services**:
+Aakash provides first-class API coverage and interactive visual management for **6 core AWS services**:
 
 | Service | Emulated Capabilities | Dashboard Tooling |
 | :--- | :--- | :--- |
 | **Amazon S3** | Buckets, multi-part uploads, binary storage, metadata, object downloads | Interactive file explorer, drag-and-drop uploads, signed URL generator |
 | **Amazon DynamoDB** | Composite keys (HASH + RANGE), attributes (S, N, M, L, BOOL), queries, updates | DynamoDB Studio, JSON item editor, filter/expression query runner |
-| **AWS Lambda** | Containerized on-demand runtimes (Node.js, Python), zip deployments | Live function invocation runner with custom JSON event payloads |
-| **Amazon SQS & SNS** | Standard queues, FIFO queues, topics, subscriptions, fan-out delivery | Message publisher, real-time message viewer, dead-letter monitoring |
 | **Amazon SES** | Identity verification, transactional sending, attachment handling | Local intercepted email inbox with HTML/Text rendering & MIME viewer |
-| **SSM Parameter Store**| Hierarchical `/app/prod/` parameters, `String`, `StringList`, `SecureString` | Centralized parameter editor with instant decryption viewer |
-| **AWS Secrets Manager**| JSON key-value secret vaults, encrypted secrets, on-demand rotation | Secure credentials manager with reveal/hide masking and JSON validator |
-| **CloudWatch Logs** | Log groups, log streams, event ingestion, timestamp sequencing | Real-time live log tailer with keyword pattern filtering |
 | **Amazon EC2** | VM instance state simulation (Run, Stop, Reboot, Terminate), security groups | Instance lifecycle manager with state indicators and proxy SSH hints |
 | **Amazon RDS** | PostgreSQL, MySQL, MariaDB emulation with pgvector support | One-click port reachability tester & connection string generator |
 | **Amazon ElastiCache**| Redis / Valkey standalone and cluster emulation | Node status diagnostics and client connection string builder |
@@ -102,7 +97,6 @@ Aakash provides first-class API coverage and interactive visual management for *
 
 - **Unified Gateway**: All AWS SDKs and CLI commands target a single port (`4566`).
 - **Zero Configuration**: No cloud accounts, credit cards, or external network connectivity required.
-- **NAT & Host Rewriting**: Intelligent Docker container IP translation prevents leaked internal bridge IPs when connecting external host clients.
 
 ---
 
@@ -123,8 +117,6 @@ aws --endpoint-url=http://localhost:4566 s3 ls
 # Query DynamoDB
 aws --endpoint-url=http://localhost:4566 dynamodb list-tables
 
-# Query SSM
-aws --endpoint-url=http://localhost:4566 ssm get-parameters-by-path --path "/app" --recursive --with-decryption
 ```
 
 ### 2. Node.js (AWS SDK v3)
@@ -208,11 +200,7 @@ npm run test
 ### Test Operations Coverage
 - **S3**: Bucket creation, binary object upload, checksum verification, prefix listing, and deletion.
 - **DynamoDB**: Composite HASH + RANGE table creation, nested JSON item persistence, query with KeyConditionExpression, UpdateItem expressions, and cleanup.
-- **SQS & SNS**: Topic creation, queue subscription, fan-out event publication, message polling, and envelope verification.
 - **SES**: Email identity verification, transactional message dispatch, and local inbox interception.
-- **SSM & Secrets Manager**: Hierarchical SecureString encryption, decrypted path queries, and secret key rotation.
-- **CloudWatch Logs**: Group and stream provisioning, log event ingestion, and keyword pattern search.
-- **Lambda**: On-demand zip bundle compilation, container execution, and mathematical payload computation.
 - **EC2 & RDS**: Instance state tracking and database proxy port connectivity diagnostics.
 
 ---

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getS3Client } from "@/lib/aws/clients";
 import { handleAwsError } from "@/lib/aws/error-handler";
+import { errorResponse, intParam, readJson, validationError } from "@/lib/api/server";
 import { deleteObjectSchema } from "@/lib/validations/s3";
 import {
   ListObjectsV2Command,
@@ -17,15 +18,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { bucket } = await params;
     const { searchParams } = new URL(request.url);
     const continuationToken = searchParams.get("continuationToken") || undefined;
-    const maxKeys = parseInt(searchParams.get("maxKeys") || "50", 10);
+    const maxKeys = intParam(searchParams.get("maxKeys"), 50, 1, 100);
     const prefix = searchParams.get("prefix") || undefined;
+    // With a delimiter, S3 groups keys into "folders" (CommonPrefixes).
+    const delimiter = searchParams.get("delimiter") || undefined;
 
     const s3 = getS3Client();
     const command = new ListObjectsV2Command({
       Bucket: bucket,
       ContinuationToken: continuationToken,
-      MaxKeys: Math.min(maxKeys, 100),
+      MaxKeys: maxKeys,
       Prefix: prefix,
+      Delimiter: delimiter,
     });
 
     const response = await s3.send(command);
@@ -42,6 +46,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       bucket,
       objects,
+      prefixes: (response.CommonPrefixes || []).map((p) => p.Prefix || "").filter(Boolean),
       isTruncated: response.IsTruncated || false,
       nextContinuationToken: response.NextContinuationToken || null,
       keyCount: response.KeyCount || 0,
@@ -59,10 +64,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const key = (formData.get("key") as string | null) || file?.name;
 
     if (!file || !key) {
-      return NextResponse.json(
-        { error: { code: "ValidationError", message: "File and object key are required" } },
-        { status: 400 }
-      );
+      return errorResponse("ValidationError", "File and object key are required", 400);
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -95,14 +97,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { bucket } = await params;
-    const body = await request.json();
+    const body = await readJson<Record<string, unknown>>(request);
     const validation = deleteObjectSchema.safeParse({ ...body, bucketName: bucket });
 
     if (!validation.success) {
-      return NextResponse.json(
-        { error: { code: "ValidationError", message: validation.error.errors[0]?.message || "Invalid input" } },
-        { status: 400 }
-      );
+      return validationError(validation.error);
     }
 
     const s3 = getS3Client();

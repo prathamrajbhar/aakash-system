@@ -1,21 +1,18 @@
 "use client";
 
 import React from "react";
-import { Server, HardDrive, ExternalLink } from "lucide-react";
-import Link from "next/link";
+import { HardDrive } from "lucide-react";
 
 interface WelcomeBannerProps {
   apiEndpoint: string;
   isUp: boolean;
   version: string;
-  networkMode: string;
 }
 
 export function AwsWelcomeBanner({
   apiEndpoint,
   isUp,
   version,
-  networkMode,
 }: WelcomeBannerProps) {
   return (
     <div className="rounded-xl bg-white border border-slate-200/90 p-6 shadow-2xs">
@@ -46,22 +43,9 @@ export function AwsWelcomeBanner({
           </div>
 
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium">
-            <Server className="h-3.5 w-3.5 text-slate-500" />
-            <span className="capitalize">Mode: {networkMode}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium">
             <HardDrive className="h-3.5 w-3.5 text-emerald-600" />
             <span>Host Persistent</span>
           </div>
-
-          <Link
-            href="/settings/network"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs transition-colors shadow-2xs"
-          >
-            <span>Network</span>
-            <ExternalLink className="h-3 w-3" />
-          </Link>
         </div>
       </div>
     </div>
